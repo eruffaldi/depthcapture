@@ -134,10 +134,7 @@ int main(int argc, char **argv)
             fh.channel.readerGet(pp);
             if(pp)
             {
-                        auto cvImg = cvCreateImageHeader(
-                cvSize(pp->p->width, pp->p->height),
-                IPL_DEPTH_8U,
-                3);
+                        auto cvImg = cvCreateImageHeader(cvSize(pp->p->width, pp->p->height), IPL_DEPTH_8U,3);
 
               cvSetData(cvImg, pp->p->data, pp->p->width * 3); 
               cvNamedWindow("Test", CV_WINDOW_AUTOSIZE);
