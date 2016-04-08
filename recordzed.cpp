@@ -204,8 +204,17 @@ int main(int argc, char **argv)
         if (res < 0) {
           uvc_perror(res, "start_streaming");
         } else {
-          //uvc_error_t resAEMODE = uvc_set_ae_mode(devh, 1);
-          //uvc_perror(resAEMODE, "set_ae_mode");
+          // UVC_AUTO_EXPOSURE_MODE_MANUAL=1
+          // UVC_AUTO_EXPOSURE_MODE_AUTO=2
+          // UVC_AUTO_EXPOSURE_MODE_SHUTTER_PRIORITY=3
+          // UVC_AUTO_EXPOSURE_MODE_APERTURE_PRIORITY=4
+          #define UVC_AUTO_EXPOSURE_MODE_MANUAL 1
+          uvc_error_t e = uvc_set_ae_mode(devh, UVC_AUTO_EXPOSURE_MODE_MANUAL);
+          uvc_perror(e, "FAILED set_ae_mode");
+
+          //  0.0001 = 100 for 10ms
+          uvc_set_exposure_abs(devh,200);
+          uvc_perror(e, "FAILED uvc_set_exposure_abs");
           while(true)
           {
             FrameHandler::uvc_frame_t_wrap * pp = 0;
