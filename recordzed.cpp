@@ -45,6 +45,7 @@ public:
   PeriodTiming<> tf= {"frame"};
   PeriodTiming<> tc={"compression"};
   PeriodTiming<> to={"opencvtransfer"};
+  int allocatedpools = 0;
 
   /// custom encoder that stores NALS to file
   class x264EncoderX : public x264Encoder 
@@ -70,7 +71,7 @@ public:
   PooledChannel<uvc_frame_t_wrap> channel;
   std::ofstream onf;
 
-  FrameHandler(const char * co) : onf(co,std::ios::binary) ,channel(5,true,true)
+  FrameHandler(const char * co) : onf(co,std::ios::binary) ,channel(6,true,true)
   {
     if(!onf)
     {
@@ -100,7 +101,10 @@ public:
         else
         {
           if(!pp->p)
+          {
               pp->p = uvc_allocate_frame(frame->width * frame->height * 3);
+              allocatedpools++;
+          }
           // we want to release frame
           uvc_any2bgr(frame, pp->p);
           channel.writerDone(pp);
@@ -115,13 +119,18 @@ public:
 
     if(tf.count() > 100)
     {
+      dostat();
+    }
+  }
+
+  void dostat()
+  {
       std::cout << "-----\n\t"<<tf << "\n\t"  << tc << "\n\t" << to << std::endl;
       tf.statreset();
       tc.statreset();
       to.statreset();
-    }
-  }
 
+  }
   int frames = 0;
 };
 
@@ -189,13 +198,14 @@ int main(int argc, char **argv)
       if (res < 0) {
         uvc_perror(res, "get_mode");
       } else {
+        PeriodTiming<> ta= {"streaming"};
         res = uvc_start_streaming(devh, &ctrl, [] (uvc_frame_t *frame, void *p) { (*(FrameHandler*)p)(frame); }, (void*)&fh, 0);
 
         if (res < 0) {
           uvc_perror(res, "start_streaming");
         } else {
-          uvc_error_t resAEMODE = uvc_set_ae_mode(devh, 1);
-          uvc_perror(resAEMODE, "set_ae_mode");
+          //uvc_error_t resAEMODE = uvc_set_ae_mode(devh, 1);
+          //uvc_perror(resAEMODE, "set_ae_mode");
           while(true)
           {
             FrameHandler::uvc_frame_t_wrap * pp = 0;
@@ -213,10 +223,14 @@ int main(int argc, char **argv)
               fh.channel.readerDone(pp);
               cvReleaseImageHeader(&cvImg);
             }
-          }
+          }          
           uvc_stop_streaming(devh);
           puts("Done streaming.");
+          fh.dostat();
         }
+        ta.stop();
+        std::cout << ta << std::endl;
+        std::cout << "allocatedpools " << fh.allocatedpools<< std::endl;
       }
 
       uvc_close(devh);
