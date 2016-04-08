@@ -34,6 +34,25 @@
     return r;
  }
 
+
+void saveR200YAML(rs::intrinsics  && di, rs::extrinsics  & dc, rs::intrinsics & ci, const char * filename)
+{
+  // width height ... ?
+
+}
+
+class DepthFrameHandler
+{
+public:
+
+    void operator()(const uint16_t * d, int w, int h, int frame)
+    {
+          // save frame
+          // save compressed size
+          // save data
+    }
+};
+
 /// handles a libuvc frame
 class FrameHandler
 {
@@ -108,6 +127,7 @@ int main(int argc, char **argv)
     //rs::log_to_file(rs::log_severity::debug, "librealsense.log");
     FrameHandler fh;
     rs::context ctx;
+    DepthFrameHandler dh;
     printf("There are %d connected RealSense devices.\n", ctx.get_device_count());
     if(ctx.get_device_count() == 0) return EXIT_FAILURE;
 
@@ -134,6 +154,9 @@ int main(int argc, char **argv)
     rs::extrinsics depth_to_color = dev->get_extrinsics(rs::stream::depth, rs::stream::color);
     rs::intrinsics color_intrin = dev->get_stream_intrinsics(rs::stream::color);
 
+    //saveR200YAML(depth_intrin,depth_to_color,color_intrin,"out.yaml");
+
+    int frames = 0;
     while(true)
     {
       dev->wait_for_frames();
@@ -146,6 +169,10 @@ int main(int argc, char **argv)
       f.step = 3*f.width;
       f.data = (uint8_t*)color_frame;
       fh(&f);
+
+      dh(depth_frame,depth_intrin.width,depth_intrin.height,frames);
+
+      frames++;
 
 
       // TODO: IS BGR

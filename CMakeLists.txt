@@ -12,7 +12,7 @@ set_property(TARGET p::librealsense PROPERTY INTERFACE_LINK_LIBRARIES ${REALSESN
 
 add_definitions(--std=c++11)
 add_executable(recordzed recordzed.cpp x264encoder.cpp)
-target_link_libraries(recordzed p::x264 p::libuvc p::boost p::opencv p::ffmpeg::swscale)
+target_link_libraries(recordzed p::x264 p::libuvc p::boost p::boost::program_options p::opencv p::ffmpeg::swscale)
 
 add_definitions(--std=c++11)
 add_executable(recordr200 recordr200.cpp x264encoder.cpp)

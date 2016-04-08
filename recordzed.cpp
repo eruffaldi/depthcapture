@@ -3,18 +3,48 @@
  */
 #include <stdio.h>
 #include <opencv/highgui.h>
-
+#include <boost/program_options.hpp>
 #include "libuvc/libuvc.h"
 #include <thread>
 #include <iostream>
 #include <fstream>
+#include "timingex.hpp"
 #include "pooledchannel.hpp"
 #include "x264encoder.h"
+
+namespace po = boost::program_options;
+
+std::string makefilename()
+{
+    const  char *MON[13]={"*","JAN","FEB","MAR","APR","MAY","JUN",
+            "JUL","AUG","SEP","OCT","NOV","DEC"};
+  char name[255];
+#ifdef __WIN32__
+    SYSTEMTIME Now;
+    GetLocalTime(&Now);
+    sprintf(name,"%d%0d%0d_%02d%02d%02d", Now.wYear, Now.wMonth,
+            Now.wDay, Now.wHour, Now.wMinute, Now.wSecond);
+#else
+    time_t NowS;
+    struct tm *Now;
+    time(&NowS);
+    Now = localtime(&NowS);
+    sprintf(name,"%d%0d%0d_%02d%02d%02d", Now->tm_year+1900, Now->tm_mon,
+            Now->tm_mday, Now->tm_hour, Now->tm_min, Now->tm_sec);
+
+#endif
+    return name;
+
+}
+
 
 /// handles a libuvc frame
 class FrameHandler
 {
 public:
+  PeriodTiming<> tf= {"frame"};
+  PeriodTiming<> tc={"compression"};
+  PeriodTiming<> to={"opencvtransfer"};
 
   /// custom encoder that stores NALS to file
   class x264EncoderX : public x264Encoder 
@@ -40,12 +70,19 @@ public:
   PooledChannel<uvc_frame_t_wrap> channel;
   std::ofstream onf;
 
-  FrameHandler() : onf("out.x264",std::ios::binary) ,channel(5,true,true){}
+  FrameHandler(const char * co) : onf(co,std::ios::binary) ,channel(5,true,true)
+  {
+    if(!onf)
+    {
+      std::cerr << "cannot create " << co << std::endl;
+      exit(0);
+    }
+  }
 
   /// handles one file from the lambda
   void operator()(uvc_frame_t * frame)
   {
-    std::cout << "." << std::endl;
+    tf.start();
     if(!encoder)
     {
         encoder.initialize(frame->width,frame->height, x264Encoder::InputFormat::YUYV,4);
@@ -56,6 +93,7 @@ public:
     // TODO: OpenMP could split this in two
     if(++frames % 3 == 0)
     {
+        to.start();
         uvc_frame_t_wrap * pp = channel.writerGet(false);
         if(!pp)
           --frames;
@@ -67,9 +105,21 @@ public:
           uvc_any2bgr(frame, pp->p);
           channel.writerDone(pp);
         }
+        to.stop();
     } 
     /// encoding and storage
+    tc.start();
     encoder.encodeFrame((uint8_t*)frame->data,frame->step);
+    tc.stop();
+    tf.stop();
+
+    if(tf.count() > 100)
+    {
+      std::cout << "-----\n\t"<<tf << "\n\t"  << tc << "\n\t" << to << std::endl;
+      tf.statreset();
+      tc.statreset();
+      to.statreset();
+    }
   }
 
   int frames = 0;
@@ -82,20 +132,40 @@ int main(int argc, char **argv)
   uvc_device_t *dev;
   uvc_device_handle_t *devh;
   uvc_stream_ctrl_t ctrl;
-  FrameHandler fh;
+
+  po::options_description desc("Record ZED");
+  desc.add_options()
+      ("help", "produce help message")
+      ("outputfile", po::value<std::string>()->default_value("zed"+makefilename() + ".h264"), "output file")
+      ("width", po::value<int>()->default_value(3840), "width")
+      ("height", po::value<int>()->default_value(1080), "height")
+      ("rate", po::value<int>()->default_value(30), "rate")
+  ;
+
+  po::variables_map vm;
+  po::store(po::parse_command_line(argc, argv, desc), vm);
+  po::notify(vm);    
+
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    return 1;
+  }
+
+  std::cout << "Starting with " << vm["width"].as<int>() << " x " << vm["height"].as<int>() << "@" << vm["rate"].as<int>() << " to " << vm["outputfile"].as<std::string>()<< std::endl;
+
+  FrameHandler fh(vm["outputfile"].as<std::string>().c_str());
 
   res = uvc_init(&ctx, NULL);
 
-  if (res < 0) {
+  if (res < 0) 
+  {
     uvc_perror(res, "uvc_init");
     return res;
   }
 
   puts("UVC initialized");
 
-  res = uvc_find_device(
-      ctx, &dev,
-      0, 0, NULL);
+  res = uvc_find_device(      ctx, &dev,      0, 0, NULL);
 
   if (res < 0) {
     uvc_perror(res, "uvc_find_device");
@@ -112,8 +182,7 @@ int main(int argc, char **argv)
       uvc_print_diag(devh, stderr);
 
       res = uvc_get_stream_ctrl_format_size(
-          devh, &ctrl, UVC_FRAME_FORMAT_YUYV, 3840, 1080, 30
-      );
+          devh, &ctrl, UVC_FRAME_FORMAT_YUYV, vm["width"].as<int>(), vm["height"].as<int>(), vm["rate"].as<int>());
 
       uvc_print_stream_ctrl(&ctrl, stderr);
 
@@ -125,8 +194,7 @@ int main(int argc, char **argv)
         if (res < 0) {
           uvc_perror(res, "start_streaming");
         } else {
-          puts("Streaming for 10 seconds...");
-          uvc_error_t resAEMODE = uvc_set_ae_mode(devh, 0);
+          uvc_error_t resAEMODE = uvc_set_ae_mode(devh, 1);
           uvc_perror(resAEMODE, "set_ae_mode");
           while(true)
           {
@@ -142,7 +210,6 @@ int main(int argc, char **argv)
               int q = cvWaitKey(10);
               if(q != -1)
                 break;
-              std::cout << "out " << q << std::endl;
               fh.channel.readerDone(pp);
               cvReleaseImageHeader(&cvImg);
             }
