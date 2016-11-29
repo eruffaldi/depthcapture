@@ -198,12 +198,6 @@ int main(int argc, char **argv)
       if (res < 0) {
         uvc_perror(res, "get_mode");
       } else {
-        PeriodTiming<> ta= {"streaming"};
-        res = uvc_start_streaming(devh, &ctrl, [] (uvc_frame_t *frame, void *p) { (*(FrameHandler*)p)(frame); }, (void*)&fh, 0);
-
-        if (res < 0) {
-          uvc_perror(res, "start_streaming");
-        } else {
           // UVC_AUTO_EXPOSURE_MODE_MANUAL=1
           // UVC_AUTO_EXPOSURE_MODE_AUTO=2
           // UVC_AUTO_EXPOSURE_MODE_SHUTTER_PRIORITY=3
@@ -212,9 +206,33 @@ int main(int argc, char **argv)
           uvc_error_t e = uvc_set_ae_mode(devh, UVC_AUTO_EXPOSURE_MODE_MANUAL);
           uvc_perror(e, "FAILED set_ae_mode");
 
+#if 0
+           ZED_BRIGHTNESS=0, /*!< Defines the brightness control. Affected value should be between 0 and 8   \ingroup Enumerations*/
+            uvc_set_brightness
+       ZED_CONTRAST=1,/*!< Defines the constral control. Affected value should be between 0 and 8   \ingroup Enumerations*/
+        uvc_set_contrast
+       ZED_HUE=2,/*!< Defines the hue control. Affected value should be between 0 and 11   \ingroup Enumerations*/
+         uvc_set_hue
+       ZED_SATURATION=3,/*!< Defines the saturation control. Affected value should be between 0 and 8   \ingroup Enumerations*/
+        uvc_set_saturation
+       ZED_GAIN=4,/*!< Defines the gain control. Affected value should be between 0 and 8   \ingroup Enumerations*/
+        uvc_set_gain
+       ZED_WHITEBALANCE=5,/*!< Defines the while balance (color temperature) manual control. Affected value should be between 2800 and 6500  \ingroup Enumerations*/    
+        uvc_set_white_balance_temperature
+#endif
           //  0.0001 = 100 for 10ms
-          uvc_set_exposure_abs(devh,200);
+          e = uvc_set_exposure_abs(devh,200);
           uvc_perror(e, "FAILED uvc_set_exposure_abs");
+          e = uvc_set_white_balance_temperature(devh,6500);
+          uvc_perror(e, "FAILED uvc_set_exposure_abs");
+          
+        PeriodTiming<> ta= {"streaming"};
+        res = uvc_start_streaming(devh, &ctrl, [] (uvc_frame_t *frame, void *p) { (*(FrameHandler*)p)(frame); }, (void*)&fh, 0);
+
+        if (res < 0) {
+          uvc_perror(res, "start_streaming");
+        } else {
+
           while(true)
           {
             FrameHandler::uvc_frame_t_wrap * pp = 0;

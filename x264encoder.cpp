@@ -5,6 +5,7 @@ using namespace std;
 #if 1
     #define PIX_FMT_RGB24 AV_PIX_FMT_RGB24
     #define PIX_FMT_YUV420P AV_PIX_FMT_YUV420P
+	#define PIX_FMT_YUYV422 AV_PIX_FMT_YUYV422
     #define PixelFormat AVPixelFormat
     #define CODEC_ID_H264 AV_CODEC_ID_H264
 #endif 
